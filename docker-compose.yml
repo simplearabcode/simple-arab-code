@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: simple-arab-code-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-simple_arab_code}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-simple_arab_code_password}
+      POSTGRES_DB: ${DB_NAME:-simple_arab_code}
+    ports:
+      - '${DB_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-simple_arab_code}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ============================================
+  # Redis Cache & Session Store
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: simple-arab-code-redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ============================================
+  # Backend Service (NestJS)
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: simple-arab-code-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://${DB_USER:-simple_arab_code}:${DB_PASSWORD:-simple_arab_code_password}@postgres:5432/${DB_NAME:-simple_arab_code}?schema=public
+      - DB_USER=${DB_USER:-simple_arab_code}
+      - DB_PASSWORD=${DB_PASSWORD:-simple_arab_code_password}
+      - DB_NAME=${DB_NAME:-simple_arab_code}
+      - DB_PORT=5432
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # Server
+      - PORT=${BACKEND_PORT:-4000}
+      - NODE_ENV=development
+      # Frontend URL
+      - FRONTEND_URL=http://localhost:${FRONTEND_PORT:-3000}
+      # CORS
+      - ALLOWED_ORIGINS=http://localhost:${FRONTEND_PORT:-3000},http://frontend:4200
+    ports:
+      - '${BACKEND_PORT:-4000}:4000'
+    volumes:
+      # Mount source for hot reload
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - ./backend/test:/app/test
+      # Preserve node_modules in container
+      - backend_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/health || exit 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+  # ============================================
+  # Frontend Service (Next.js)
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      args:
+        - NODE_ENV=development
+    container_name: simple-arab-code-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-4000}
+      # Internal API URL for server-side requests
+      - API_URL=http://backend:4000
+    ports:
+      - '${FRONTEND_PORT:-3000}:3000'
+    volumes:
+      # Mount source for hot reload (mount entire src directory)
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/next.config.ts:/app/next.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs
+      - ./frontend/tailwind.config.ts:/app/tailwind.config.ts
+      # Preserve node_modules in container
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://127.0.0.1:3000 || exit 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+  # ============================================
+  # pgAdmin (Optional - for database management)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: simple-arab-code-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@simplearabcode.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - '${PGADMIN_PORT:-5050}:80'
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - app-network
+    profiles:
+      - tools
+
+  # ============================================
+  # Redis Commander (Optional - for Redis management)
+  # ============================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: simple-arab-code-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - '${REDIS_COMMANDER_PORT:-8081}:8081'
+    depends_on:
+      - redis
+    networks:
+      - app-network
+    profiles:
+      - tools
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+  frontend_node_modules:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  app-network:
+    driver: bridge

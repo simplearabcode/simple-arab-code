@@ -1,0 +1,53 @@
+{
+  "name": "simple-arab-code",
+  "version": "1.0.0",
+  "description": "Simple Arab Code - Full-stack course management platform",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker compose up",
+    "docker:up:d": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:down:v": "docker compose down -v",
+    "docker:build": "docker compose up --build",
+    "docker:build:d": "docker compose up -d --build",
+    "docker:restart": "docker compose restart",
+    "docker:logs": "docker compose logs -f",
+    "docker:logs:backend": "docker compose logs -f backend",
+    "docker:logs:frontend": "docker compose logs -f frontend",
+    "docker:logs:postgres": "docker compose logs -f postgres",
+    "docker:logs:redis": "docker compose logs -f redis",
+    "docker:ps": "docker compose ps",
+    "docker:stop": "docker compose stop",
+    "docker:start": "docker compose start",
+    "docker:tools": "docker compose --profile tools up -d",
+    "docker:clean": "docker compose down -v --rmi all --remove-orphans",
+    "backend:shell": "docker compose exec backend sh",
+    "frontend:shell": "docker compose exec frontend sh",
+    "backend:test": "docker compose exec backend pnpm test",
+    "frontend:test": "docker compose exec frontend pnpm test",
+    "backend:migrate": "docker compose exec backend pnpm prisma:migrate",
+    "backend:generate": "docker compose exec backend pnpm prisma:generate",
+    "backend:studio": "docker compose exec backend pnpm prisma:studio",
+    "dev": "docker compose up",
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "restart": "docker compose restart",
+    "logs": "docker compose logs -f"
+  },
+  "keywords": [
+    "docker",
+    "docker-compose",
+    "nextjs",
+    "nestjs",
+    "postgres",
+    "redis",
+    "course-platform"
+  ],
+  "author": "Simple Arab Code",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.18.3"
+}
